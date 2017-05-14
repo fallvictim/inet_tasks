@@ -11,7 +11,7 @@ def print_info(user_id):
     if user['online'] == 1:
         print('Online')
     else:
-        last_seen = user['last_seen']['time']
+        last_seen = user['last_seen']['time_serv']
         if last_seen > 1262304000:
             time = datetime.datetime.fromtimestamp(last_seen).strftime('%d.%m.%Y %H:%M:%S')
             print('Был в сети ' + time)
