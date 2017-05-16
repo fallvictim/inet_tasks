@@ -1,62 +1,62 @@
-from binascii import hexlify, unhexlify
+from binascii import hexlify
 import struct
 
 
-packet = b'\xa2G\x81\x80\x00\x01\x00\x01\x00\x02\x00\x03\x07storage\x03mds\x06yandex\x03net\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00\x01\xa6\x00\x04\xd5\xb4\xcc\x9e\xc0\x14\x00\x02\x00\x01\x00\x00\r\xcb\x00\x0f\x03ns4\x06yandex\x02ru\x00\xc0\x14\x00\x02\x00\x01\x00\x00\r\xcb\x00\x06\x03ns3\xc0H\x03ns3\x06YANDEX\xc0O\x00\x01\x00\x01\x00\x00\x0f\xa8\x00\x04W\xfa\xfa\x01\xc0e\x00\x1c\x00\x01\x00\x00\x01\xd6\x00\x10*\x02\x06\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\x01\x03ns4\xc0i\x00\x01\x00\x01\x00\x00\x03\x16\x00\x04MX\x15\x01'
+packet = b''
 
+TYPE = {1:'A', 2:'NS', 5:'CNAME', 6:'SOA', 12:'PTR', 15:'MX',
+        16:'TXT', 17:'RP', 18:'AFSDB', 24:'SIG', 25:'KEY', 28:'AAAA',
+        29:'LOC', 33:'SRV', 35:'NAPTR', 36:'KX', 37:'CERT', 39:'DNAME',
+        41:'OPT', 42:'APL', 43:'DS', 44:'SSHFP', 45:'IPSECKEY',
+        46:'RRSIG', 47:'NSEC', 48:'DNSKEY', 49:'DHCID', 50:'NSEC3',
+        51:'NSEC3PARAM', 52:'TLSA', 55:'HIP', 99:'SPF', 249:'TKEY',
+        250:'TSIG', 251:'IXFR', 252:'AXFR', 255:'ANY', 257:'TYPE257',
+        32768:'TA', 32769:'DLV'}
 
-def hex2int(data):
-    return int(hexlify(data), 16)
+CLASS = {1:'IN', 2:'CS', 3:'CH', 4:'Hesiod', 254:'None', 255:'*'}
 
+QR = {0:'QUERY', 1:'RESPONSE'}
 
-def hex2bin(data, pad):
-    try:
-        return bin(int(hexlify(data), 16))[2:].zfill(pad)
-    except ValueError:
-        print(data)
+RCODE = {0:'NOERROR', 1:'FORMERR', 2:'SERVFAIL', 3:'NXDOMAIN',
+         4:'NOTIMP', 5:'REFUSED', 6:'YXDOMAIN', 7:'YXRRSET',
+         8:'NXRRSET', 9:'NOTAUTH', 10:'NOTZONE'}
+
+OPCODE = {0:'QUERY', 1:'IQUERY', 2:'STATUS', 5:'UPDATE'}
 
 
 def int2bin(data, pad):
     return bin(data)[2:].zfill(pad)
 
 
-def unpack(fmt, data):
-    return struct.unpack(fmt, data)[0]
-
-
 def unpack_from(fmt, data, offset=0):
-    return struct.unpack_from(fmt, data, offset)[0]
+    return struct.unpack_from(fmt, data, offset)
 
 
 def parse_flags(flags):
-    qr = int(flags[0])
-    opcode = int(flags[1:5], 2)
+    qr = QR.get(int(flags[0]))
+    opcode = OPCODE.get(int(flags[1:5], 2))
     aa = bool(int(flags[5]))
     tc = bool(int(flags[6]))
     rd = bool(int(flags[7]))
     ra = bool(int(flags[8]))
     z = int(flags[9:12])
-    rcode = int(flags[12:], 2)
+    rcode = RCODE.get(int(flags[12:], 2))
     return {'qr': qr, 'opcode': opcode, 'aa': aa, 'tc': tc, 'rd': rd, 'ra': ra, 'z': z, 'rcode': rcode}
 
 
 def parse_header():
-    packet_id = unpack_from('!H', packet, 0)
-    flags = int2bin(unpack_from('!H', packet, 2), 16)
-    qcount = unpack_from('!H', packet, 4)
-    ancount = unpack_from('!H', packet, 6)
-    nscount = unpack_from('!H', packet, 8)
-    arcount = unpack_from('!H', packet, 10)
-    result = {'id': packet_id, 'qcount': qcount, 'ancount': ancount, 'nscount': nscount, 'arcount': arcount}
-    result.update(parse_flags(flags))
-    return result
+    packet_id, flags, qcount, ancount, nscount, arcount = unpack_from('!HHHHHH', packet, 0)
+    flags = int2bin(flags, 16)
+    header = {'id': packet_id, 'qcount': qcount, 'ancount': ancount, 'nscount': nscount, 'arcount': arcount}
+    header.update(parse_flags(flags))
+    return {'header':header}
 
 
 def read_name(offset):
     name = ''
     while True:
-        marker = unpack_from('!B', packet, offset)
-        temp = int2bin(unpack_from('!H', packet, offset), 16)
+        marker = unpack_from('!B', packet, offset)[0]
+        temp = int2bin(unpack_from('!H', packet, offset)[0], 16)
         if temp[0:2] == '11':
             prev_offset = int(temp[2:], 2)
             name += read_name(prev_offset)[0]
@@ -67,8 +67,8 @@ def read_name(offset):
             offset += 1
             if length == 0:
                 break
-            fmt = '!' + '{}s'.format(length)
-            piece = unpack_from(fmt, packet, offset).decode()
+            fmt = '!{}s'.format(length)
+            piece = unpack_from(fmt, packet, offset)[0].decode()
             name += piece + '.'
             offset += length
     return name, offset
@@ -78,41 +78,67 @@ def parse_questions(qcount, offset):
     result = {'questions': []}
     for i in range(qcount):
         name, offset = read_name(offset)
-        qtype = unpack_from('!H', packet, offset)
-        qclass = unpack_from('!H', packet, offset + 2)
+        qtype, qclass = unpack_from('!HH', packet, offset)
         offset += 4
-        result.get('questions').append({'name': name, 'qtype': qtype, 'qclass': qclass})
+        result.get('questions').append({'name': name, 'qtype': TYPE.get(qtype), 'qclass': CLASS.get(qclass)})
     return result, offset
+
+
+def parse_rdata(type, length, offset):
+    if type == 'CNAME' or type == 'NS' or type == 'PTR':
+        return read_name(offset)[0]
+    elif type == 'A':
+        return '.'.join(str(num) for num in unpack_from('!4B', packet, offset))
+    elif type == 'AAAA':
+        return ':'.join('{0:04x}'.format(num) for num in unpack_from('!8H', packet, offset))
+    elif type == 'MX':
+        preference = unpack_from('!H', packet, offset)[0]
+        exchange = read_name(offset + 1)
+        return {'PREFERENCE':preference, 'EXCHANGE':exchange}
+    elif type == 'SOA':
+        mname, offset = read_name(offset)
+        rname, offset = read_name(offset)
+        serial, refresh, retry, expire, minimum = unpack_from('!HHHHH', packet, offset)
+        return {'MNAME':mname, 'RNAME':rname,
+                'SERIAL':serial, 'REFRESH':refresh, 'RETRY':retry, 'EXPIRE':expire, 'MINIMUM':minimum}
+    elif type == 'TXT':
+        return unpack_from('!{}s'.format(length), packet, offset)[0].decode()
+    else:
+        return unpack_from('!{}s'.format(length), packet, offset)[0]
 
 
 def parse_answers(res_type, ancount, offset):
     result = {res_type: []}
     for i in range(ancount):
         name, offset = read_name(offset)
-        type = unpack_from('!H', packet, offset)
-        r_class = unpack_from('!H', packet, offset + 2)
-        ttl = unpack_from('!I', packet, offset + 4)
-        rdlength = unpack_from('!H', packet, offset + 8)
-        #TODO parse rdata
-        rdata = unpack_from('!{}s'.format(rdlength), packet, offset + 10)
+        type, r_class, ttl, rdlength = unpack_from('!HHIH', packet, offset)
+        type = TYPE.get(type)
+        rdata = parse_rdata(type, rdlength, offset + 10)
         offset += 10 + rdlength
-        result.get(res_type).append({'name': name, 'type': type, 'rclass': r_class, 'ttl': ttl, 'rdlength':rdlength, 'rdata': rdata})
+        result.get(res_type).append({'name': name, 'type': type,
+                                     'rclass': r_class, 'ttl': ttl, 'rdlength':rdlength, 'rdata': rdata})
     return result, offset
 
 
-def parse():
+def parse(data):
+    global packet
+    packet = data
+    if len(packet) < 12:
+        return
+    parsed = {}
     header = parse_header()
     offset = 12
-    qcount = header.get('qcount')
-    questions, offset = parse_questions(qcount, offset)
-    answers, offset = parse_answers('answers', header.get('ancount'), offset)
-    nses, offset = parse_answers('nss', header.get('nscount'), offset)
-    arrs, offset = parse_answers('arrs', header.get('arcount'), offset)
-    #TODO make updates in one expression
-    header.update(questions)
-    header.update(answers)
-    header.update(nses)
-    header.update(arrs)
-    return header
-
-print(parse())
+    temp_header = header.get('header')
+    try:
+        questions, offset = parse_questions(temp_header.get('qcount'), offset)
+        answers, offset = parse_answers('answers', temp_header.get('ancount'), offset)
+        nses, offset = parse_answers('nss', temp_header.get('nscount'), offset)
+        arrs, offset = parse_answers('arrs', temp_header.get('arcount'), offset)
+        parsed.update(header)
+        parsed.update(questions)
+        parsed.update(answers)
+        parsed.update(nses)
+        parsed.update(arrs)
+        return parsed
+    except struct.error:
+        pass
