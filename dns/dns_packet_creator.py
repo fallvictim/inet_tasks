@@ -1,7 +1,4 @@
 import struct
-from dns import dns_parser, cache
-
-parsed = {'arrs': [{'rdata': '87.250.250.1', 'name': 'ns3.YANDEX.ru.', 'ttl': 4008, 'rdlength': 4, 'rclass': 1, 'type': 'A'}, {'rdata': '2a02:06b8:0000:0000:0000:0000:0000:1001', 'name': 'ns3.YANDEX.ru.', 'ttl': 470, 'rdlength': 16, 'rclass': 1, 'type': 'AAAA'}, {'rdata': '77.88.21.1', 'name': 'ns4.YANDEX.ru.', 'ttl': 790, 'rdlength': 4, 'rclass': 1, 'type': 'A'}], 'nss': [{'rdata': 'ns4.yandex.ru.', 'name': 'mds.yandex.net.', 'ttl': 3531, 'rdlength': 15, 'rclass': 1, 'type': 'NS'}, {'rdata': 'ns3.yandex.ru.', 'name': 'mds.yandex.net.', 'ttl': 3531, 'rdlength': 6, 'rclass': 1, 'type': 'NS'}], 'questions': [{'qtype': 'A', 'qclass': 'IN', 'name': 'storage.mds.yandex.net.'}], 'header': {'arcount': 3, 'aa': False, 'opcode': 'QUERY', 'z': 0, 'id': 41543, 'nscount': 2, 'qr': 'RESPONSE', 'qcount': 1, 'rd': True, 'tc': False, 'ancount': 1, 'ra': True, 'rcode': 'NOERROR'}, 'answers': [{'rdata': '213.180.204.158', 'name': 'storage.mds.yandex.net.', 'ttl': 422, 'rdlength': 4, 'rclass': 1, 'type': 'A'}]}
 
 TYPE = {'NSEC3': 50, 'LOC': 29, 'TYPE257': 257, 'TSIG': 250, 'IPSECKEY': 45,
         'CNAME': 5, 'KEY': 25, 'CERT': 37, 'DLV': 32769, 'NS': 2, 'RP': 17,

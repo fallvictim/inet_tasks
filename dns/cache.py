@@ -1,6 +1,8 @@
 import datetime
 import time
 import json
+import os.path
+
 
 cache = {'answers': dict(dict()), 'nss': dict(dict()), 'arrs': dict(dict())}
 
@@ -17,6 +19,7 @@ def get_answers(questions):
                     record[0]['ttl'] = ttl.seconds
                     ans[k].append(record[0])
                     found = True
+                else:
                     clear_overdue()
     if found:
         return ans
@@ -67,3 +70,7 @@ def initialize_cache():
                 record = cache[k][name][rtype][1]
                 cache[k][name][rtype][1] = datetime.datetime.strptime(record, "%Y-%m-%dT%H:%M:%S.%f")
     clear_overdue()
+
+
+if os.path.isfile('cache.json'):
+    initialize_cache()

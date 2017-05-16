@@ -1,4 +1,3 @@
-from binascii import hexlify
 import struct
 
 
@@ -141,4 +140,4 @@ def parse(data):
         parsed.update(arrs)
         return parsed
     except struct.error:
-        pass
+        return None
