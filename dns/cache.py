@@ -1,76 +1,84 @@
-import datetime
-import time
-import json
+from datetime import datetime, timedelta
+import pickle
 import os.path
+import threading
 
 
-cache = {'answers': dict(dict()), 'nss': dict(dict()), 'arrs': dict(dict())}
+cache = dict()
 
 
 def get_answers(questions):
     ans = {'answers': [], 'nss': [], 'arrs': []}
     found = False
     for q in questions:
-        for k in ans.keys():
-            record = cache[k].get(q.get('name'), {}).get(q.get('qtype'))
-            if record is not None:
-                ttl = datetime.timedelta(seconds=record[0].get('ttl')) - (datetime.datetime.now() - record[1])
-                if ttl.seconds > 0:
-                    record[0]['ttl'] = ttl.seconds
-                    ans[k].append(record[0])
-                    found = True
+        name, rtype = q['name'], q['qtype']
+        cur_time = datetime.now()
+        for k in list(cache.keys()):
+            n, t, end = k
+            if end < cur_time:
+                cache.pop(k)
+                continue
+            if name == n and rtype == t:
+                found = True
+                if len(ans['answers']) > 0:
+                    ans['arrs'] += cache[k]
                 else:
-                    clear_overdue()
+                    ans['answers'] += cache[k]
     if found:
         return ans
     else:
         return
 
 
-def add_answers(response, rec_time):
-    for k in ['answers', 'nss', 'arrs']:
+def add_answers(response):
+    cur_time = datetime.now()
+    for k in ['answers', 'arrs']:
         for a in response.get(k):
-            name, rtype, ttl = a.get('name'), a.get('type'), a.get('ttl')
-            cache[k].update({name: {rtype: [a, rec_time]}})
+            name, rtype, ttl = a['name'], a['type'], a['ttl']
+            end = cur_time + timedelta(seconds=ttl)
+            if cache.get((name, rtype, end)) is None:
+                cache[(name, rtype, end)] = [a]
+            else:
+                cache[(name, rtype, end)].append(a)
 
 
 def clear_overdue():
-    for k in list(cache.keys()):
-        for name in list(cache[k].keys()):
-            for rtype in list(cache[k][name].keys()):
-                record = cache[k][name][rtype]
-                rec_time, ttl = record[1], datetime.timedelta(seconds=record[0].get('ttl'))
-                time.sleep(2)
-                past = datetime.datetime.now() - rec_time
-                if past > ttl:
-                    cache[k][name].pop(rtype)
-            if cache[k].get(name) == {}:
-                cache[k].pop(name)
+    print('cleaning cache')
+    cur_time = datetime.now()
+    for n,t,end in list(cache.keys()):
+        if end < cur_time:
+            cache.pop((n, t, end))
+
+
+def do_every(interval, worker_func, iterations=0):
+    if iterations != 1:
+        threading.Timer(
+            interval,
+            do_every, [interval, worker_func, 0 if iterations == 0 else iterations-1]
+        ).start()
+    worker_func()
 
 
 def save_cache():
+    print('Saving cache')
     clear_overdue()
-    temp = cache.copy()
-    for k in list(temp.keys()):
-        for name in list(temp[k].keys()):
-            for rtype in list(temp[k][name].keys()):
-                record = temp[k][name][rtype][1]
-                temp[k][name][rtype][1] = record.isoformat()
-    with open('cache.json', 'w') as fp:
-        json.dump(temp, fp)
+    with open('cache.pickle', 'wb') as fp:
+        pickle.dump(cache, fp)
 
 
 def initialize_cache():
     global cache
-    with open('cache.json', 'r') as fp:
-        cache = json.load(fp)
-    for k in list(cache.keys()):
-        for name in list(cache[k].keys()):
-            for rtype in list(cache[k][name].keys()):
-                record = cache[k][name][rtype][1]
-                cache[k][name][rtype][1] = datetime.datetime.strptime(record, "%Y-%m-%dT%H:%M:%S.%f")
+    print('Initializing cache')
+    try:
+        with open('cache.pickle', 'rb') as fp:
+            cache = pickle.load(fp)
+    except ValueError:
+        print('something wrong with cache file')
+        open('cache.pickle', 'wb').close()
     clear_overdue()
 
 
-if os.path.isfile('cache.json'):
+if os.path.isfile('cache.pickle'):
     initialize_cache()
+
+do_every(60, clear_overdue)

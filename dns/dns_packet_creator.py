@@ -131,4 +131,5 @@ def create(query, response):
     answers, offset = create_answers((response.get('answers')), offset)
     nss, offset = create_answers((response.get('nss')), offset)
     arrs, offset = create_answers((response.get('arrs')), offset)
+    domain_names.clear()
     return header + questions + answers + nss + arrs
